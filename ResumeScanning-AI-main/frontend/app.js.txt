@@ -1,0 +1,273 @@
+const state = {
+  screening: null,
+  files: [],
+  sortDescending: true,
+  query: "",
+  filter: "all",
+  skillFilter: "all",
+  scoreMin: 0,
+  weights: JSON.parse(localStorage.getItem("signalboard-weights") || '{"required_skill":40,"preferred_skill":10,"experience":20,"education":10,"similarity":20}'),
+};
+const $ = (selector) => document.querySelector(selector);
+
+function initials(name = "Candidate") {
+  return name.split(" ").slice(0, 2).map((part) => part[0]).join("").toUpperCase();
+}
+function escapeHtml(value = "") {
+  return String(value).replace(/[&<>"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#039;" }[char]));
+}
+function showToast(message) {
+  const toast = $("#toast");
+  toast.textContent = message; toast.classList.add("show");
+  window.clearTimeout(showToast.timer);
+  showToast.timer = window.setTimeout(() => toast.classList.remove("show"), 2800);
+}
+function pct(value) { return `${Math.round(Number(value || 0))}%`; }
+
+function renderRequirements(requirements) {
+  const skills = [...(requirements.required_skills || []), ...(requirements.preferred_skills || [])];
+  $("#requirement-count").textContent = `${skills.length} signals`;
+  $("#requirement-chips").innerHTML = skills.length
+    ? skills.map((skill, index) => `<span class="chip">${escapeHtml(skill)}${index >= (requirements.required_skills || []).length ? " · preferred" : ""}</span>`).join("")
+    : '<span class="empty-chip">Requirements appear here after analysis</span>';
+}
+function renderSkillFilter(candidates) {
+  const skills = [...new Set(candidates.flatMap((candidate) => candidate.skills || []))].sort();
+  const select = $("#skill-filter");
+  const current = state.skillFilter;
+  select.innerHTML = '<option value="all">All skills</option>' + skills.map((skill) => `<option value="${escapeHtml(skill)}">${escapeHtml(skill)}</option>`).join("");
+  select.value = skills.includes(current) ? current : "all";
+  state.skillFilter = select.value;
+}
+function renderMetrics(screening) {
+  const candidates = screening.candidates || [];
+  const top = [...candidates].sort((a, b) => b.score - a.score)[0];
+  $("#metric-candidates").textContent = String(candidates.length).padStart(2, "0");
+  $("#metric-top").textContent = top ? pct(top.score) : "—";
+  $("#metric-top-name").textContent = top?.name || "No candidates yet";
+  $("#metric-skills").textContent = String((screening.requirements?.required_skills || []).length).padStart(2, "0");
+}
+function candidateRow(candidate, index) {
+  const palette = ["", "warm", "blue", "pink"];
+  const breakdown = candidate.breakdown || {};
+  return `<tr data-candidate="${index}">
+    <td class="rank-col"><span class="rank">${String(candidate.rank || index + 1).padStart(2, "0")}</span></td>
+    <td><div class="candidate-cell"><span class="candidate-avatar ${palette[index % palette.length]}">${initials(candidate.name)}</span><div><span class="candidate-name">${escapeHtml(candidate.name)}</span><span class="candidate-file">${escapeHtml(candidate.filename || "resume")}</span></div></div></td>
+    <td><span class="score-cell">${pct(candidate.score)}</span><div class="score-track"><i style="width:${Math.min(candidate.score || 0, 100)}%"></i></div></td>
+    <td><span class="skill-count">${(candidate.matching_skills || []).length} matched</span></td>
+    <td><span class="metric ${breakdown.experience >= 70 ? "good" : "muted"}">${pct(breakdown.experience)}</span></td>
+    <td><span class="metric ${breakdown.education >= 70 ? "good" : "muted"}">${pct(breakdown.education)}</span></td>
+    <td><span class="row-arrow">›</span></td>
+  </tr>`;
+}
+function renderCandidates(candidates) {
+  const filtered = candidates.filter((candidate) => {
+    const matchesQuery = !state.query || `${candidate.name} ${candidate.email} ${(candidate.skills || []).join(" ")}`.toLowerCase().includes(state.query.toLowerCase());
+    const matchesFilter = state.filter === "all" || (state.filter === "strong" && candidate.score >= 80) || (state.filter === "review" && candidate.score < 80);
+    const matchesSkill = state.skillFilter === "all" || (candidate.skills || []).includes(state.skillFilter);
+    return matchesQuery && matchesFilter && matchesSkill && candidate.score >= state.scoreMin;
+  });
+  const ranked = [...filtered].sort((a, b) => state.sortDescending ? b.score - a.score : a.score - b.score);
+  ranked.forEach((item, index) => item.rank = index + 1);
+  $("#candidate-rows").innerHTML = ranked.map(candidateRow).join("");
+  $("#results-meta").textContent = `${ranked.length} of ${candidates.length} candidates · ranked by signal strength`;
+  ranked.forEach((candidate, index) => {
+    $("#candidate-rows").children[index].addEventListener("click", () => openDrawer(candidate, index));
+  });
+  if (ranked[0]) {
+    $("#pulse-required").style.width = `${ranked[0].breakdown.required_skills}%`;
+    $("#pulse-experience").style.width = `${ranked[0].breakdown.experience}%`;
+    $("#pulse-similarity").style.width = `${ranked[0].breakdown.similarity}%`;
+    $("#pulse-copy").textContent = `${ranked[0].name} leads with ${ranked[0].matching_skills.slice(0, 3).join(", ") || "the strongest evidence"} in the role signal.`;
+  }
+}
+function renderScreening(screening) {
+  state.screening = screening;
+  $("#job-description").value = screening.job_description || "";
+  renderRequirements(screening.requirements || {});
+  renderSkillFilter(screening.candidates || []);
+  renderMetrics(screening);
+  renderCandidates(screening.candidates || []);
+}
+function openDrawer(candidate, index) {
+  const breakdown = candidate.breakdown || {};
+  const rows = [["Required skills", breakdown.required_skills], ["Preferred skills", breakdown.preferred_skills], ["Experience", breakdown.experience], ["Education", breakdown.education], ["Text alignment", breakdown.similarity]];
+  $("#drawer-content").innerHTML = `<div class="drawer-profile"><span class="candidate-avatar ${["", "warm", "blue", "pink"][index % 4]}">${initials(candidate.name)}</span><div><h2>${escapeHtml(candidate.name)}</h2><p>${escapeHtml(candidate.email || "Email not extracted")} · ${escapeHtml(candidate.filename || "resume")}</p></div></div>
+    <div class="drawer-score"><strong>${pct(candidate.score)}</strong><span>overall signal strength</span></div>
+    <div class="drawer-section"><h4>Score composition</h4>${rows.map(([label, value]) => `<div class="breakdown-row"><span>${label}</span><b><i style="width:${value}%"></i></b><strong>${pct(value)}</strong></div>`).join("")}</div>
+    <div class="drawer-section"><h4>Matching skills</h4><div class="drawer-chips">${(candidate.matching_skills || []).map((skill) => `<span class="drawer-chip">${escapeHtml(skill)}</span>`).join("") || "<span class='metric muted'>No confident matches</span>"}</div></div>
+    <div class="drawer-section"><h4>Areas to review</h4><div class="drawer-chips">${(candidate.missing_skills || []).map((skill) => `<span class="drawer-chip missing">${escapeHtml(skill)}</span>`).join("") || "<span class='metric good'>No skill gaps surfaced</span>"}</div><p class="note">${escapeHtml((candidate.review_notes || []).join(" "))}</p></div>
+    <div class="drawer-section"><h4>Recruiter context</h4><p class="note">${escapeHtml(candidate.decision_note || "Review the supporting evidence before taking action.")}</p></div>`;
+  $("#candidate-drawer").classList.add("open");
+}
+function closeDrawer() { $("#candidate-drawer").classList.remove("open"); }
+function renderFiles() {
+  $("#file-count").textContent = `${state.files.length} file${state.files.length === 1 ? "" : "s"}`;
+  const list = $("#file-list");
+  list.classList.toggle("has-files", state.files.length > 0);
+  list.innerHTML = state.files.map((file, index) => `<div class="file-row"><span>${file.name.split(".").pop().toUpperCase()}</span><strong>${escapeHtml(file.name)}</strong><span>${(file.size / 1024 / 1024).toFixed(1)} MB</span><button class="remove-file" data-remove="${index}">×</button></div>`).join("");
+  list.querySelectorAll("[data-remove]").forEach((button) => button.addEventListener("click", () => { state.files.splice(Number(button.dataset.remove), 1); renderFiles(); }));
+}
+async function loadDemo() {
+  try {
+    const response = await fetch("/api/demo");
+    if (!response.ok) throw new Error("demo unavailable");
+    renderScreening(await response.json());
+    await renderHistory();
+    renderTalent();
+  } catch {
+    showToast("Start the FastAPI server to load the demo.");
+  }
+}
+async function renderHistory() {
+  const list = $("#history-list");
+  if (!list) return;
+  try {
+    const response = await fetch("/api/screenings");
+    const history = await response.json();
+    $("#history-count").textContent = history.length;
+    list.innerHTML = history.length ? history.map((item) => `<button class="history-item" data-history-id="${item.id}"><div><div class="history-title">${escapeHtml(item.title)}</div><div class="history-date">${new Date(item.created_at).toLocaleString()}</div></div><div class="history-stats"><span><strong>${item.candidate_count}</strong>candidates</span><span><strong>${pct(item.top_score)}</strong>top signal</span><span class="row-arrow">›</span></div></button>`).join("") : '<div class="empty-state">No saved screenings yet. Run a live screening and it will appear here.</div>';
+    list.querySelectorAll("[data-history-id]").forEach((item) => item.addEventListener("click", async () => {
+      const detail = await fetch(`/api/screenings/${item.dataset.historyId}`);
+      renderScreening(await detail.json());
+      setView("screening");
+    }));
+  } catch {
+    list.innerHTML = '<div class="empty-state">History is available when the FastAPI server is running.</div>';
+  }
+}
+function renderTalent() {
+  const list = $("#talent-list");
+  if (!list) return;
+  const candidates = state.screening?.candidates || [];
+  list.innerHTML = candidates.length ? candidates.map((candidate, index) => `<article class="talent-card" data-talent-index="${index}"><span class="candidate-avatar ${["", "warm", "blue", "pink"][index % 4]}">${initials(candidate.name)}</span><h3>${escapeHtml(candidate.name)}</h3><p>${escapeHtml(candidate.email || "Contact details need review")}</p><div class="talent-card-footer"><span>${(candidate.matching_skills || []).length} matching skills</span><strong>${pct(candidate.score)}</strong></div></article>`).join("") : '<div class="empty-state">Run a screening to build this focused talent view.</div>';
+  list.querySelectorAll("[data-talent-index]").forEach((item) => item.addEventListener("click", () => openDrawer(candidates[Number(item.dataset.talentIndex)], Number(item.dataset.talentIndex))));
+}
+function renderAnalytics() {
+  const candidates = state.screening?.candidates || [];
+  const scoreBars = $("#score-bars");
+  const skillBars = $("#skill-bars");
+  if (!scoreBars || !skillBars) return;
+  scoreBars.innerHTML = candidates.length ? [...candidates].sort((a, b) => b.score - a.score).map((candidate) => `<div class="bar-row"><span>${escapeHtml(candidate.name)}</span><b><i style="width:${candidate.score}%"></i></b><strong>${pct(candidate.score)}</strong></div>`).join("") : '<div class="empty-state">Run a screening to see score distribution.</div>';
+  const counts = {};
+  candidates.forEach((candidate) => (candidate.matching_skills || []).forEach((skill) => { counts[skill] = (counts[skill] || 0) + 1; }));
+  const topSkills = Object.entries(counts).sort((a, b) => b[1] - a[1]).slice(0, 7);
+  skillBars.innerHTML = topSkills.length ? topSkills.map(([skill, count]) => `<div class="bar-row"><span>${escapeHtml(skill)}</span><b><i style="width:${(count / candidates.length) * 100}%"></i></b><strong>${count}/${candidates.length}</strong></div>`).join("") : '<div class="empty-state">No matching skills yet.</div>';
+}
+async function renderDashboard() {
+  const historyTarget = $("#dashboard-history");
+  try {
+    const response = await fetch("/api/screenings");
+    const history = await response.json();
+    const candidates = state.screening?.candidates || [];
+    $("#dash-resumes").textContent = String(history.reduce((sum, item) => sum + item.candidate_count, candidates.length)).padStart(2, "0");
+    $("#dash-average").textContent = candidates.length ? pct(candidates.reduce((sum, candidate) => sum + candidate.score, 0) / candidates.length) : "—";
+    $("#dash-top").textContent = String(candidates.filter((candidate) => candidate.score >= 80).length).padStart(2, "0");
+    $("#dash-role").textContent = state.screening?.title || "Senior Python Engineer";
+    historyTarget.innerHTML = history.slice(0, 3).map((item) => `<button class="history-item" data-history-id="${item.id}"><div><div class="history-title">${escapeHtml(item.title)}</div><div class="history-date">${new Date(item.created_at).toLocaleDateString()}</div></div><div class="history-stats"><span><strong>${pct(item.top_score)}</strong>top signal</span><span class="row-arrow">›</span></div></button>`).join("") || '<div class="empty-state">Your saved screenings will appear here.</div>';
+    historyTarget.querySelectorAll("[data-history-id]").forEach((item) => item.addEventListener("click", async () => { const detail = await fetch(`/api/screenings/${item.dataset.historyId}`); renderScreening(await detail.json()); setView("screening"); }));
+  } catch { historyTarget.innerHTML = '<div class="empty-state">Dashboard data is available when the server is running.</div>'; }
+}
+function renderJobs() {
+  if (!state.screening) return;
+  $("#jobs-role-title").textContent = state.screening.title || "Untitled role";
+  $("#jobs-requirement-chips").innerHTML = [...(state.screening.requirements?.required_skills || []), ...(state.screening.requirements?.preferred_skills || [])].map((skill) => `<span class="chip">${escapeHtml(skill)}</span>`).join("") || '<span class="empty-chip">Analyze a brief to see requirements</span>';
+}
+function setProcessing(active, step = "read") {
+  const panel = $("#processing-state");
+  panel.classList.toggle("visible", active);
+  if (!active) return;
+  const steps = ["read", "extract", "match", "rank"];
+  const currentIndex = steps.indexOf(step);
+  steps.forEach((name, index) => { const element = $(`[data-process-step="${name}"]`); element.classList.toggle("done", index < currentIndex); element.classList.toggle("current", index === currentIndex); element.textContent = `${index < currentIndex ? "✓" : index === currentIndex ? "●" : "○"} ${element.textContent.slice(2)}`; });
+  $("#processing-percent").textContent = `${Math.min((currentIndex + 1) * 25, 100)}%`;
+}
+function renderSettings() {
+  const labels = { required_skill: "Required skills", preferred_skill: "Preferred skills", experience: "Experience", education: "Education", similarity: "Text alignment" };
+  $("#weight-controls").innerHTML = Object.entries(labels).map(([key, label]) => `<div class="weight-row"><label for="weight-${key}">${label}</label><input id="weight-${key}" type="range" min="0" max="60" value="${state.weights[key]}" /><output id="output-${key}">${state.weights[key]}%</output></div>`).join("");
+  Object.keys(labels).forEach((key) => $(`#weight-${key}`).addEventListener("input", (event) => { state.weights[key] = Number(event.target.value); $(`#output-${key}`).value = `${event.target.value}%`; $(`#output-${key}`).textContent = `${event.target.value}%`; }));
+  const savedFont = localStorage.getItem("signalboard-font") || "inter";
+  const savedDensity = localStorage.getItem("signalboard-density") || "comfortable";
+  const savedAccent = localStorage.getItem("signalboard-accent") || "lime";
+  $("#font-select").value = savedFont; $("#density-select").value = savedDensity; $("#accent-select").value = savedAccent;
+  applyDisplaySettings(savedFont, savedDensity, savedAccent);
+}
+function applyDisplaySettings(font, density, accent) {
+  document.documentElement.dataset.font = font;
+  document.documentElement.dataset.density = density;
+  document.documentElement.dataset.accent = accent;
+}
+async function runScreening() {
+  const job = $("#job-description").value.trim();
+  if (job.length < 30) { showToast("Add a fuller job description first."); return; }
+  if (!state.files.length) { showToast("Add at least one resume first."); return; }
+  const form = new FormData(); form.append("job_description", job); form.append("weights_json", JSON.stringify(state.weights)); state.files.forEach((file) => form.append("resumes", file));
+  const button = $("#run-screening"); button.disabled = true; button.innerHTML = "Processing…";
+  setProcessing(true, "read");
+  const processingTimers = [setTimeout(() => setProcessing(true, "extract"), 500), setTimeout(() => setProcessing(true, "match"), 1000), setTimeout(() => setProcessing(true, "rank"), 1500)];
+  try {
+    const response = await fetch("/api/screenings", { method: "POST", body: form });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.detail || "Screening failed.");
+    setProcessing(true, "rank"); await new Promise((resolve) => setTimeout(resolve, 220)); renderScreening(data); state.files = []; renderFiles(); setProcessing(false); await renderHistory(); showToast("Screening complete — results ranked.");
+  } catch (error) { setProcessing(false); showToast(error.message); } finally { processingTimers.forEach((timer) => clearTimeout(timer)); button.disabled = false; button.innerHTML = "Run screening <span>↗</span>"; }
+}
+function setView(view) {
+  document.querySelectorAll(".view").forEach((item) => item.classList.remove("active-view"));
+  document.querySelectorAll(".nav-item").forEach((item) => item.classList.toggle("active", item.dataset.view === view));
+  $(`#${view}-view`).classList.add("active-view");
+  if (view === "history") renderHistory();
+  if (view === "overview") renderDashboard();
+  if (view === "jobs") renderJobs();
+  if (view === "talent") renderTalent();
+  if (view === "analytics") renderAnalytics();
+  if (view === "settings") renderSettings();
+}
+function setup() {
+  $("#browse-button").addEventListener("click", () => $("#resume-files").click());
+  const addFiles = (incoming) => {
+    const valid = incoming.filter((file) => /\.(pdf|docx|txt)$/i.test(file.name) && file.size <= 8 * 1024 * 1024);
+    if (valid.length !== incoming.length) showToast("Only PDF, DOCX or TXT files up to 8 MB are accepted.");
+    state.files.push(...valid); renderFiles();
+  };
+  $("#resume-files").addEventListener("change", (event) => { addFiles(Array.from(event.target.files)); event.target.value = ""; });
+  const dropzone = $("#dropzone");
+  ["dragenter", "dragover"].forEach((eventName) => dropzone.addEventListener(eventName, (event) => { event.preventDefault(); dropzone.classList.add("dragover"); }));
+  ["dragleave", "drop"].forEach((eventName) => dropzone.addEventListener(eventName, (event) => { event.preventDefault(); dropzone.classList.remove("dragover"); }));
+  dropzone.addEventListener("drop", (event) => addFiles(Array.from(event.dataTransfer.files)));
+  $("#run-screening").addEventListener("click", runScreening);
+  $("#analyze-brief").addEventListener("click", async () => {
+    const text = $("#job-description").value.trim();
+    if (text.length < 20) { showToast("Add more detail to analyze this brief."); return; }
+    const response = await fetch("/api/analyze-job", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ text }) });
+    const requirements = await response.json();
+    if (!response.ok) { showToast(requirements.detail || "Could not analyze the brief."); return; }
+    if (state.screening) state.screening.requirements = requirements;
+    renderRequirements(requirements); renderMetrics(state.screening || { candidates: [], requirements });
+    showToast("Brief analyzed — requirements are ready.");
+  });
+  $("#sort-button").addEventListener("click", () => { state.sortDescending = !state.sortDescending; $("#sort-button span").textContent = state.sortDescending ? "Score: high to low" : "Score: low to high"; renderCandidates(state.screening?.candidates || []); });
+  $("#candidate-search").addEventListener("input", (event) => { state.query = event.target.value; renderCandidates(state.screening?.candidates || []); });
+  $("#candidate-filter").addEventListener("change", (event) => { state.filter = event.target.value; renderCandidates(state.screening?.candidates || []); });
+  $("#skill-filter").addEventListener("change", (event) => { state.skillFilter = event.target.value; renderCandidates(state.screening?.candidates || []); });
+  $("#score-min").addEventListener("input", (event) => { state.scoreMin = Math.max(0, Math.min(100, Number(event.target.value) || 0)); renderCandidates(state.screening?.candidates || []); });
+  $("#reset-demo").addEventListener("click", loadDemo);
+  $("#new-screening").addEventListener("click", () => { $("#job-description").value = ""; state.files = []; renderFiles(); renderRequirements({}); $("#job-description").focus(); showToast("Fresh screening ready."); });
+  $("#close-drawer").addEventListener("click", closeDrawer); $("#candidate-drawer").addEventListener("click", (event) => { if (event.target.id === "candidate-drawer") closeDrawer(); });
+  document.querySelectorAll(".nav-item").forEach((item) => item.addEventListener("click", () => setView(item.dataset.view)));
+  document.querySelectorAll("[data-go-screening]").forEach((item) => item.addEventListener("click", () => setView("screening")));
+  $("#apply-settings").addEventListener("click", () => {
+    localStorage.setItem("signalboard-weights", JSON.stringify(state.weights));
+    const font = $("#font-select").value; const density = $("#density-select").value; const accent = $("#accent-select").value;
+    localStorage.setItem("signalboard-font", font); localStorage.setItem("signalboard-density", density); localStorage.setItem("signalboard-accent", accent);
+    applyDisplaySettings(font, density, accent); showToast("Workspace settings saved.");
+  });
+  ["font-select", "density-select", "accent-select"].forEach((id) => $(`#${id}`).addEventListener("change", () => applyDisplaySettings($("#font-select").value, $("#density-select").value, $("#accent-select").value)));
+  $("#download-report").addEventListener("click", () => {
+    const content = state.screening?.candidates?.map((candidate) => `${candidate.rank}. ${candidate.name} — ${candidate.score}%\nMatching: ${(candidate.matching_skills || []).join(", ")}\nReview: ${(candidate.review_notes || []).join(" ")}\n`).join("\n") || "";
+    const blob = new Blob([`SIGNALBOARD SCREENING REPORT\n\n${content}`], { type: "text/plain" });
+    const link = document.createElement("a"); link.href = URL.createObjectURL(blob); link.download = "signalboard-screening-report.txt"; link.click(); URL.revokeObjectURL(link.href);
+  });
+  loadDemo();
+}
+setup();

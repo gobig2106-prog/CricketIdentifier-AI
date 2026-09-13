@@ -1,0 +1,23 @@
+$ErrorActionPreference = "Stop"
+
+Write-Host "Signalboard Windows setup" -ForegroundColor Cyan
+
+if (-not (Get-Command python -ErrorAction SilentlyContinue)) {
+    Write-Error "Python was not found. Install Python 3.10+ from python.org and enable Add Python to PATH."
+}
+
+if (-not (Test-Path ".venv\Scripts\python.exe")) {
+    Write-Host "Creating virtual environment..."
+    python -m venv .venv
+}
+
+$python = ".\.venv\Scripts\python.exe"
+Write-Host "Upgrading pip..."
+& $python -m pip install --upgrade pip
+
+Write-Host "Installing dependencies with download retries..."
+& $python -m pip install --no-cache-dir --default-timeout=120 --retries 10 -r requirements.txt
+
+Write-Host ""
+Write-Host "Setup complete. Starting Signalboard..." -ForegroundColor Green
+& $python -m uvicorn backend.app.main:app --reload

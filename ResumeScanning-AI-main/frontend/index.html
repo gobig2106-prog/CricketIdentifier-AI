@@ -1,0 +1,118 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#101d2d" />
+    <title>Signalboard — Resume Screening Studio</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Inter:wght@400;500;600;700;800&family=Plus+Jakarta+Sans:wght@600;700;800&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="/assets/styles.css" />
+  </head>
+  <body>
+    <div class="app-shell">
+      <aside class="sidebar">
+        <div class="brand">
+          <div class="brand-mark"><span></span><span></span><span></span></div>
+          <div><strong>signalboard</strong><small>screening studio</small></div>
+        </div>
+        <div class="workspace-switcher">
+          <div class="avatar avatar-gold">AL</div>
+          <div><span class="muted-label">WORKSPACE</span><strong>Atlas Labs</strong></div>
+          <button class="icon-button" aria-label="Switch workspace">⌄</button>
+        </div>
+        <nav class="primary-nav">
+          <span class="nav-label">WORKSPACE</span>
+          <button class="nav-item" data-view="overview"><span class="nav-icon">⌂</span>Dashboard</button>
+          <button class="nav-item" data-view="jobs"><span class="nav-icon">▣</span>Jobs</button>
+          <button class="nav-item" data-view="talent"><span class="nav-icon">◎</span>Candidates</button>
+          <button class="nav-item active" data-view="screening"><span class="nav-icon">◈</span>Resume screening</button>
+          <button class="nav-item" data-view="history"><span class="nav-icon">◷</span>Screening history <em id="history-count">3</em></button>
+          <button class="nav-item" data-view="analytics"><span class="nav-icon">◒</span>Analytics</button>
+          <span class="nav-label nav-label-spaced">MANAGE</span>
+          <button class="nav-item" data-view="settings"><span class="nav-icon">⌘</span>Scoring settings</button>
+          <button class="nav-item" data-view="guide"><span class="nav-icon">?</span>How it works</button>
+        </nav>
+        <div class="sidebar-foot">
+          <div class="privacy-card"><div class="privacy-icon">✦</div><div><strong>Responsible by default</strong><p>Signals support review. They never decide it.</p></div></div>
+          <div class="user-row"><div class="avatar avatar-blue">AS</div><div><strong>Alex Singh</strong><span>Recruiting lead</span></div><button class="more-button">•••</button></div>
+        </div>
+      </aside>
+
+      <main class="main-content">
+        <header class="topbar">
+          <div class="breadcrumb"><span>Workspace</span><b>/</b><strong>Active screening</strong></div>
+          <div class="topbar-actions"><span class="live-dot"></span><span class="sync-status">All systems operational</span><button class="help-button">? <span>Help center</span></button><div class="top-avatar">AS</div></div>
+        </header>
+        <div id="toast" class="toast" role="status"></div>
+
+        <section id="screening-view" class="view active-view">
+          <div class="page-intro">
+            <div><div class="eyebrow"><span class="eyebrow-dot"></span>SCREENING WORKSPACE · 04 OCT 2025</div><h1>Find the signal<br /><i>in the stack.</i></h1><p>Compare candidates against the role, then review the evidence behind every score.</p></div>
+            <div class="intro-actions"><button class="secondary-button" id="reset-demo">↻ <span>Reset demo</span></button><button class="primary-button" id="new-screening">+ New screening</button></div>
+          </div>
+
+          <div class="workflow-grid">
+            <section class="panel job-panel">
+              <div class="panel-header"><div><span class="step-number">01</span><div class="panel-kicker">ROLE BRIEF</div><h2>What are you hiring for?</h2></div><span class="status-pill draft-pill">● Draft</span></div>
+              <label class="field-label" for="job-description">Job description</label>
+              <textarea id="job-description" class="job-input" placeholder="Paste the role description here..."></textarea>
+              <div class="requirement-heading"><span>Extracted requirements</span><span id="requirement-count">0 signals</span></div>
+              <div id="requirement-chips" class="chip-list"><span class="empty-chip">Requirements appear here after analysis</span></div>
+              <div class="job-footer"><span class="privacy-note">⌁ Your brief stays in this workspace</span><button class="text-button" id="analyze-brief">Analyze brief <span>→</span></button></div>
+            </section>
+            <section class="panel upload-panel">
+              <div class="panel-header"><div><span class="step-number">02</span><div class="panel-kicker">TALENT POOL</div><h2>Bring in resumes</h2></div><span id="file-count" class="file-count">0 files</span></div>
+              <div id="dropzone" class="dropzone">
+                <div class="upload-symbol"><span>↑</span></div><h3>Drop resumes here</h3><p>or <button class="inline-link" id="browse-button">browse files</button></p><small>PDF, DOCX or TXT · up to 8 MB each</small>
+                <input id="resume-files" type="file" multiple accept=".pdf,.docx,.txt" hidden />
+              </div>
+              <div id="file-list" class="file-list"></div>
+              <div id="processing-state" class="processing-state" aria-live="polite">
+                <div class="processing-heading"><span class="processing-spinner"></span><strong>Screening in progress</strong><span id="processing-percent">0%</span></div>
+                <div class="processing-steps"><span data-process-step="read">○ Reading files</span><span data-process-step="extract">○ Extracting resume text</span><span data-process-step="match">○ Comparing candidates</span><span data-process-step="rank">○ Generating rankings</span></div>
+              </div>
+              <div class="upload-footer"><span class="privacy-note">⌁ Files are processed locally</span><button class="primary-button compact" id="run-screening">Run screening <span>↗</span></button></div>
+            </section>
+          </div>
+
+          <div class="metric-strip">
+            <div class="metric-card"><span class="metric-icon green">↗</span><div><span class="metric-label">CANDIDATES REVIEWED</span><strong id="metric-candidates">04</strong><small>in this screening</small></div></div>
+            <div class="metric-card"><span class="metric-icon gold">✦</span><div><span class="metric-label">TOP SIGNAL</span><strong id="metric-top">86%</strong><small id="metric-top-name">Maya Chen</small></div></div>
+            <div class="metric-card"><span class="metric-icon blue">⌁</span><div><span class="metric-label">REQUIRED SKILLS</span><strong id="metric-skills">06</strong><small>role signals extracted</small></div></div>
+            <div class="metric-card"><span class="metric-icon purple">◷</span><div><span class="metric-label">REVIEW TIME SAVED</span><strong>2.4h</strong><small>estimated per role</small></div></div>
+          </div>
+
+          <div class="section-heading"><div><div class="panel-kicker">SCREENING OUTPUT</div><h2>Candidate signals</h2></div><div class="results-tools"><span id="results-meta">4 candidates · ranked by signal strength</span><input id="candidate-search" class="search-input" placeholder="Search candidates" /><select id="candidate-filter" class="filter-select"><option value="all">All signals</option><option value="strong">Strong 80%+</option><option value="review">Needs review</option></select><select id="skill-filter" class="filter-select"><option value="all">All skills</option></select><label class="range-filter">Min <input id="score-min" type="number" min="0" max="100" value="0" />%</label><button class="secondary-button" id="sort-button">↕ <span>Score: high to low</span></button></div></div>
+          <section class="results-layout">
+            <div class="panel results-panel">
+              <div class="table-scroll"><table><thead><tr><th class="rank-col">#</th><th>Candidate</th><th>Signal</th><th>Skills</th><th>Experience</th><th>Education</th><th></th></tr></thead><tbody id="candidate-rows"></tbody></table></div>
+              <div class="table-foot"><span><span class="green-dot"></span> <strong>Signalboard baseline</strong> · transparent scoring enabled</span><button class="text-button" id="download-report">Download report <span>↓</span></button></div>
+            </div>
+            <aside class="insight-card">
+              <div class="insight-top"><span class="panel-kicker">ROLE PULSE</span><span class="pulse-live">LIVE</span></div>
+              <h3>The strongest pattern</h3>
+              <p id="pulse-copy">The top profile combines backend depth with cloud delivery experience.</p>
+              <div class="mini-bars"><div><span>Required skills</span><b><i id="pulse-required" style="width:86%"></i></b><strong>86%</strong></div><div><span>Experience</span><b><i id="pulse-experience" style="width:73%"></i></b><strong>73%</strong></div><div><span>Text alignment</span><b><i id="pulse-similarity" style="width:68%"></i></b><strong>68%</strong></div></div>
+              <div class="insight-divider"></div><div class="review-callout"><span>✦</span><p><strong>Keep humans in the loop</strong>Review the evidence before taking action. A missing keyword is not a missing capability.</p></div>
+            </aside>
+          </section>
+        </section>
+
+        <section id="overview-view" class="view content-view"><div class="content-heading"><div><div class="panel-kicker">RECRUITER DASHBOARD</div><h1>A clearer view of your pipeline.</h1><p>See your screening activity, strongest matches, and where to focus next.</p></div><button class="primary-button" data-go-screening>+ New screening</button></div><div class="dashboard-stat-grid"><div class="dashboard-stat"><span>ACTIVE JOBS</span><strong id="dash-jobs">01</strong><small>role currently in focus</small></div><div class="dashboard-stat"><span>RESUMES PROCESSED</span><strong id="dash-resumes">04</strong><small>across saved sessions</small></div><div class="dashboard-stat"><span>AVERAGE SIGNAL</span><strong id="dash-average">78%</strong><small>across current candidates</small></div><div class="dashboard-stat"><span>TOP MATCHES</span><strong id="dash-top">02</strong><small>signals above 80%</small></div></div><div class="dashboard-lower"><div class="dashboard-feature"><div class="panel-kicker">CURRENT ROLE</div><h2 id="dash-role">Senior Python Engineer</h2><p id="dash-role-copy">Your active review set is ready for evidence-led review.</p><button class="secondary-button" data-go-screening>Open screening →</button></div><div><div class="panel-kicker">RECENT ACTIVITY</div><div id="dashboard-history" class="history-list compact-history"></div></div></div></section>
+        <section id="jobs-view" class="view content-view"><div class="content-heading"><div><div class="panel-kicker">JOB WORKSPACE</div><h1>Role briefs, ready to screen.</h1><p>Prepare a clear brief, inspect its signals, then bring in your talent pool.</p></div><button class="primary-button" data-go-screening>+ Create job brief</button></div><div class="job-workspace-card"><div class="job-workspace-icon">▣</div><div><span class="status-pill draft-pill">● Active draft</span><h2 id="jobs-role-title">Senior Python Engineer</h2><p>Required and preferred requirements are extracted from the active brief. Edit them in the screening workspace before running a review.</p><div id="jobs-requirement-chips" class="chip-list"></div><button class="text-button" data-go-screening>Open job brief <span>→</span></button></div></div></section>
+        <section id="history-view" class="view content-view"><div class="content-heading"><div><div class="panel-kicker">WORKSPACE HISTORY</div><h1>Previous screenings</h1><p>Every run is saved with its exact scoring snapshot.</p></div><button class="primary-button" data-go-screening>+ New screening</button></div><div id="history-list" class="history-list"></div></section>
+        <section id="talent-view" class="view content-view"><div class="content-heading"><div><div class="panel-kicker">TALENT POOL</div><h1>People in your review set</h1><p>A focused view of candidates currently attached to this screening.</p></div><button class="secondary-button" data-go-screening>Back to screening</button></div><div id="talent-list" class="talent-grid"></div></section>
+        <section id="analytics-view" class="view content-view"><div class="content-heading"><div><div class="panel-kicker">SCREENING ANALYTICS</div><h1>Patterns worth reviewing.</h1><p>Simple descriptive analytics for the current role, not decorative charts.</p></div><button class="secondary-button" data-go-screening>Back to results</button></div><div class="analytics-grid"><div class="analytics-card"><div class="panel-kicker">SCORE DISTRIBUTION</div><h2>Candidate signal strength</h2><div id="score-bars" class="bar-chart"></div></div><div class="analytics-card"><div class="panel-kicker">SKILL COVERAGE</div><h2>Role requirements</h2><div id="skill-bars" class="bar-chart"></div></div></div></section>
+        <section id="settings-view" class="view content-view"><div class="content-heading"><div><div class="panel-kicker">SCORING SETTINGS</div><h1>Shape the signal.</h1><p>Adjust the model and presentation for this workspace.</p></div><button class="secondary-button" data-go-screening>Back to results</button></div><div class="settings-card"><div class="settings-intro"><span class="settings-mark">⌘</span><div><h2>Weighted screening model</h2><p>Give more influence to the evidence your team trusts most. The model remains explainable at every setting.</p></div></div><div id="weight-controls" class="weight-controls"></div><div class="display-settings"><div><div class="settings-label">DISPLAY OPTIONS</div><h3>Make the workspace yours</h3></div><label>Typeface<select id="font-select"><option value="inter">Inter / clean</option><option value="jakarta">Plus Jakarta / warm</option><option value="space">Space Grotesk / editorial</option></select></label><label>Density<select id="density-select"><option value="comfortable">Comfortable</option><option value="compact">Compact</option></select></label><label>Accent<select id="accent-select"><option value="lime">Lime / signal</option><option value="blue">Blue / focus</option><option value="amber">Amber / energy</option></select></label></div><div class="settings-footer"><span>Weights are applied to the next live screening.</span><button class="primary-button" id="apply-settings">Apply settings</button></div></div></section>
+        <section id="guide-view" class="view placeholder-view"><div class="placeholder-inner"><div class="placeholder-icon">?</div><div class="panel-kicker">THE SIGNALBOARD METHOD</div><h1>Evidence before assumptions.</h1><p>We extract structured signals, compare them with the role, and show the work behind the score. Signalboard does not make hiring decisions.</p><button class="secondary-button" data-go-screening>Back to workspace</button></div></section>
+      </main>
+    </div>
+
+    <div id="candidate-drawer" class="drawer-backdrop">
+      <aside class="candidate-drawer"><button id="close-drawer" class="drawer-close">×</button><div id="drawer-content"></div></aside>
+    </div>
+    <script src="/assets/app.js"></script>
+  </body>
+</html>
